@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Animated Weekdays — Live Wallpaper</title>
+  <meta name="description" content="Animated live wallpaper displaying the current day of the week with customisable fonts, languages, and breathing motion.">
+  <meta name="theme-color" content="#000000">
+  <meta property="og:title" content="Animated Weekdays — Live Wallpaper">
+  <meta property="og:description" content="Minimal animated wallpaper. Full-screen. Multilingual. Customisable.">
+
+  <!--
+    Fonts:
+    – Latin UI: Inter (400, 900)
+    – Latin display alternatives: Poppins 900, Montserrat 900, Rubik Mono One
+    – Script-specific (locked to their language):
+        Reem Kufi 700 → Persian / Arabic
+        Noto Sans Hebrew 900 → Hebrew
+        Noto Sans JP 900 → Japanese
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&family=Poppins:wght@900&family=Montserrat:wght@900&family=Rubik+Mono+One&family=Monoton&family=Reem+Kufi:wght@700&family=Noto+Sans+Hebrew:wght@900&family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
+
+  <style>
+    /* ─────────────────────────────────────────
+       RESET & BASE
+    ───────────────────────────────────────── */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100dvh; /* dvh = dynamic viewport height — fixes mobile browser-chrome overlap */
+      overflow: hidden;
+      background: #000;
+      cursor: default;
+      font-family: 'Inter', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─────────────────────────────────────────
+       CANVAS — fills viewport, Retina-aware
+       (pixel dimensions set by JS via devicePixelRatio)
+    ───────────────────────────────────────── */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none; /* prevent accidental scroll/zoom on mobile tap */
+      cursor: pointer;    /* hints that canvas is tappable (pause/resume) */
+    }
+
+    /* ─────────────────────────────────────────
+       SCREEN DIM OVERLAY
+       Black layer, opacity controlled by slider
+    ───────────────────────────────────────── */
+    #dimOverlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 0.4s ease;
+    }
+
+    /* ─────────────────────────────────────────
+       DATE / TIME — top right
+       Frosted pill so it's legible on any background
+    ───────────────────────────────────────── */
+    #datetime {
+      position: fixed;
+      top: clamp(16px, 2.2vh, 30px);
+      right: clamp(16px, 2vw, 30px);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(12px) saturate(1.1);
+      -webkit-backdrop-filter: blur(12px) saturate(1.1);
+      pointer-events: none;
+    }
+
+    #dt-time {
+      font-size: clamp(11px, 1vw, 15px);
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      color: #fff;
+      line-height: 1;
+    }
+
+    #dt-date {
+      font-size: clamp(8px, 0.72vw, 11px);
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      color: rgba(255, 255, 255, 0.5);
+      line-height: 1;
+    }
+
+    /* ─────────────────────────────────────────
+       FULLSCREEN BUTTON — bottom right
+    ───────────────────────────────────────── */
+    #fullscreenBtn {
+      position: fixed;
+      bottom: clamp(16px, 2.5vh, 30px);
+      right: clamp(16px, 2vw, 30px);
+      z-index: 30;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    #fullscreenBtn:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    #fullscreenBtn svg {
+      opacity: 0.4;
+      transition: opacity 0.2s ease;
+    }
+
+    #fullscreenBtn:hover svg {
+      opacity: 0.7;
+    }
+
+    /* Pause indicator — shown briefly on canvas click */
+    #pauseHint {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 25;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #pauseHint.show {
+      opacity: 1;
+    }
+
+    #pauseHint span {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.55);
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    @media (max-width: 480px) {
+      #fullscreenBtn {
+        bottom: clamp(12px, 2vh, 24px);
+        right: 16px;
+      }
+    }
+    #settingsBtn {
+      position: fixed;
+      bottom: clamp(16px, 2.5vh, 30px);
+      left: clamp(16px, 2vw, 30px);
+      z-index: 30;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    #settingsBtn:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    #settingsBtn svg {
+      opacity: 0.4;
+      transition: opacity 0.2s ease;
+    }
+
+    #settingsBtn:hover svg {
+      opacity: 0.7;
+    }
+
+    /* ─────────────────────────────────────────
+       SETTINGS PANEL
+       Hidden by default, slides up on open
+    ───────────────────────────────────────── */
+    #panel {
+      position: fixed;
+      bottom: calc(clamp(16px, 2.5vh, 30px) + 46px);
+      left: clamp(16px, 2vw, 30px);
+      z-index: 29;
+      width: 236px;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      overflow-x: hidden;
+
+      /* Scrollbar — subtle */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.12) transparent;
+
+      background: rgba(8, 8, 8, 0.85);
+      backdrop-filter: blur(28px) saturate(1.3);
+      -webkit-backdrop-filter: blur(28px) saturate(1.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+
+      /* Hidden state */
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    #panel.open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: all;
+    }
+
+    /* ─────────────────────────────────────────
+       PANEL INTERNALS — shared atoms
+    ───────────────────────────────────────── */
+
+    /* Section label */
+    .label {
+      display: block;
+      font-size: 8.5px;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.25);
+      margin-bottom: 7px;
+    }
+
+    /* Thin rule between sections */
+    .rule {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* ── Day grid — 7 equal columns ── */
+    .day-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+    }
+
+    .day-btn {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.32);
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 7px 2px 9px;  /* extra bottom for dot space */
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      user-select: none;
+    }
+
+    .day-btn:hover {
+      color: rgba(255, 255, 255, 0.65);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .day-btn.active {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Today indicator dot */
+    .day-btn.today::after {
+      content: '';
+      position: absolute;
+      bottom: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .day-btn.active.today::after {
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    /* ── Toggle switch ── */
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .row-label {
+      font-size: 11.5px;
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 0.01em;
+    }
+
+    .toggle {
+      position: relative;
+      width: 34px;
+      height: 19px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .track {
+      position: absolute;
+      inset: 0;
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .toggle input:checked + .track {
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .track::after {
+      content: '';
+      position: absolute;
+      top: 2.5px;
+      left: 2.5px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.2s ease;
+    }
+
+    .toggle input:checked + .track::after {
+      transform: translateX(15px);
+    }
+
+    /* ── Color picker ── */
+    .color-wrap {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      overflow: hidden;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .color-wrap input[type="color"] {
+      position: absolute;
+      inset: -5px;
+      width: calc(100% + 10px);
+      height: calc(100% + 10px);
+      opacity: 0;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+    }
+
+    .color-preview {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    /* ── Range slider ── */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      margin-top: 9px;
+      display: block;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      border: none;
+    }
+
+    /* ── Language / Font pill buttons ── */
+    .chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .chip {
+      font-family: 'Inter', sans-serif;
+      font-size: 9.5px;
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      color: rgba(255, 255, 255, 0.38);
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 5px;
+      padding: 4px 7px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      user-select: none;
+      line-height: 1.2;
+    }
+
+    .chip:hover {
+      color: rgba(255, 255, 255, 0.7);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .chip.active {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Font section locked for script languages */
+    #fontSection.locked {
+      opacity: 0.22;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #fontSection.locked .label::after {
+      content: ' — N/A';
+      opacity: 0.6;
+    }
+
+    /* ─────────────────────────────────────────
+       RESPONSIVE — small screens (phones)
+    ───────────────────────────────────────── */
+    @media (max-width: 480px) {
+      #panel {
+        width: calc(100vw - 32px);
+        left: 16px;
+        right: 16px;
+        bottom: calc(clamp(12px, 2vh, 24px) + 46px);
+        padding: 14px;
+        gap: 12px;
+        max-height: calc(100dvh - 100px);
+      }
+
+      #settingsBtn {
+        bottom: clamp(12px, 2vh, 24px);
+        left: 16px;
+      }
+
+      #datetime {
+        top: 12px;
+        right: 12px;
+      }
+
+      .day-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (max-width: 360px) {
+      #panel {
+        width: calc(100vw - 24px);
+        left: 12px;
+        padding: 12px;
+      }
+    }
+
+    /* Landscape phones — keep panel from overflowing vertically */
+    @media (max-height: 500px) {
+      #panel {
+        max-height: calc(100dvh - 80px);
+        bottom: calc(12px + 42px);
+      }
+      #settingsBtn {
+        bottom: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main canvas — day label drawn here -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Screen dim overlay — controlled by slider -->
+  <div id="dimOverlay"></div>
+
+  <!-- Live clock — top right -->
+  <div id="datetime" aria-live="polite">
+    <div id="dt-time"></div>
+    <div id="dt-date"></div>
+  </div>
+
+  <!-- Fullscreen button — bottom right -->
+  <button id="fullscreenBtn" aria-label="Toggle fullscreen" title="Fullscreen">
+    <svg id="fsIcon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+
+  <!-- Pause hint — fades in/out on canvas tap -->
+  <div id="pauseHint"><span id="pauseHintText">Paused</span></div>
+
+  <!-- Settings icon — bottom left -->
+  <button id="settingsBtn" aria-label="Open settings" aria-expanded="false">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Three horizontal control sliders — modern settings metaphor -->
+      <line x1="2" y1="4"  x2="14" y2="4"  stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="2" y1="8"  x2="14" y2="8"  stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="2" y1="12" x2="14" y2="12" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      <!-- Slider thumb markers at staggered positions -->
+      <circle cx="5"  cy="4"  r="2" fill="black" stroke="white" stroke-width="1.2"/>
+      <circle cx="10" cy="8"  r="2" fill="black" stroke="white" stroke-width="1.2"/>
+      <circle cx="6"  cy="12" r="2" fill="black" stroke="white" stroke-width="1.2"/>
+    </svg>
+  </button>
+
+  <!-- Settings panel — hidden by default -->
+  <div id="panel" role="dialog" aria-label="Settings">
+
+    <!-- Day selector -->
+    <div>
+      <span class="label">Day</span>
+      <div class="day-grid">
+        <button class="day-btn" data-day="1">MON</button>
+        <button class="day-btn" data-day="2">TUE</button>
+        <button class="day-btn" data-day="3">WED</button>
+        <button class="day-btn" data-day="4">THU</button>
+        <button class="day-btn" data-day="5">FRI</button>
+        <button class="day-btn" data-day="6">SAT</button>
+        <button class="day-btn" data-day="0">SUN</button>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- Language -->
+    <div>
+      <span class="label">Language</span>
+      <div class="chip-grid" id="langGrid">
+        <button class="chip active" data-lang="en">EN</button>
+        <button class="chip" data-lang="fr">FR</button>
+        <button class="chip" data-lang="de">DE</button>
+        <button class="chip" data-lang="es">ES</button>
+        <button class="chip" data-lang="ja">JA 日</button>
+        <button class="chip" data-lang="fa">FA ف</button>
+        <button class="chip" data-lang="he">HE ע</button>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- Animation -->
+    <div>
+      <span class="label">Animation</span>
+      <div class="row">
+        <span class="row-label">Breathing motion</span>
+        <label class="toggle" aria-label="Toggle animation">
+          <input type="checkbox" id="animToggle">
+          <div class="track"></div>
+        </label>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- Colours — background and text -->
+    <div>
+      <span class="label">Colours</span>
+      <div class="row" style="margin-bottom: 8px;">
+        <span class="row-label">Background</span>
+        <div class="color-wrap">
+          <div class="color-preview" id="bgPreview" style="background:#000"></div>
+          <input type="color" id="bgPicker" value="#000000" aria-label="Background colour">
+        </div>
+      </div>
+      <div class="row">
+        <span class="row-label">Text</span>
+        <div class="color-wrap">
+          <div class="color-preview" id="fgPreview" style="background:#fff"></div>
+          <input type="color" id="fgPicker" value="#ffffff" aria-label="Text colour">
+        </div>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- Screen dim -->
+    <div>
+      <span class="label">Dim — <span id="dimVal">0</span>%</span>
+      <input type="range" id="dimSlider" min="0" max="50" value="0" step="1" aria-label="Screen dim">
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- Font -->
+    <div id="fontSection">
+      <span class="label">Font</span>
+      <div class="chip-grid" id="fontGrid">
+        <button class="chip active" data-font="Inter">Inter</button>
+        <button class="chip" data-font="Poppins">Poppins</button>
+        <button class="chip" data-font="Montserrat">Montserrat</button>
+        <button class="chip" data-font="Rubik Mono One">Rubik Mono</button>
+        <button class="chip" data-font="Monoton">Monoton</button>
+      </div>
+    </div>
+
+  </div><!-- /panel -->
+
+<script>
+  /* ═══════════════════════════════════════════════════════
+     DAY & LANGUAGE DATA
+     All translations — day index 0 = Sunday
+  ═══════════════════════════════════════════════════════ */
+  const DAYS_ALL = {
+    en: { 0:'SUNDAY',    1:'MONDAY',    2:'TUESDAY',   3:'WEDNESDAY', 4:'THURSDAY',   5:'FRIDAY',   6:'SATURDAY'  },
+    fr: { 0:'DIMANCHE',  1:'LUNDI',     2:'MARDI',     3:'MERCREDI',  4:'JEUDI',      5:'VENDREDI', 6:'SAMEDI'    },
+    de: { 0:'SONNTAG',   1:'MONTAG',    2:'DIENSTAG',  3:'MITTWOCH',  4:'DONNERSTAG', 5:'FREITAG',  6:'SAMSTAG'   },
+    es: { 0:'DOMINGO',   1:'LUNES',     2:'MARTES',    3:'MIÉRCOLES', 4:'JUEVES',     5:'VIERNES',  6:'SÁBADO'    },
+    ja: { 0:'日曜日',    1:'月曜日',    2:'火曜日',    3:'水曜日',    4:'木曜日',     5:'金曜日',   6:'土曜日'    },
+    fa: { 0:'یکشنبه',   1:'دوشنبه',   2:'سه‌شنبه',  3:'چهارشنبه', 4:'پنج‌شنبه',  5:'جمعه',     6:'شنبه'      },
+    he: { 0:'יום ראשון',1:'יום שני',  2:'יום שלישי', 3:'יום רביעי',4:'יום חמישי', 5:'יום שישי', 6:'שבת'       },
+  };
+
+  /* Languages that use their own script — font picker locked */
+  const SCRIPT_LANGS = new Set(['ja', 'fa', 'he']);
+
+  /* Script-language → font override (canvas rendering) */
+  const LANG_FONT = {
+    ja: '"Noto Sans JP"',
+    fa: '"Reem Kufi"',
+    he: '"Noto Sans Hebrew"',
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     STATE
+  ═══════════════════════════════════════════════════════ */
+  const todayIdx  = new Date().getDay(); // real calendar day, never mutated
+  let currentDay  = todayIdx;
+  let currentLang = 'en';
+  let fontName    = 'Inter';
+  let BG          = '#000000';
+  let FG          = '#ffffff';
+  let animated    = false;
+  let animTime    = 0;
+  let lastTs      = null;
+  let paused      = false;  // pause-on-click toggle
+  let dirty       = true;   // force a redraw whenever state changes
+
+  /* ═══════════════════════════════════════════════════════
+     PERSISTENCE — localStorage save / load
+  ═══════════════════════════════════════════════════════ */
+  const STORAGE_KEY = 'wallpaper_weekdays_v1';
+
+  function saveState() {
+    dirty = true; // mark canvas for redraw on any settings change
+    try {
+      const dimSlider = document.getElementById('dimSlider');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        currentDay,
+        currentLang,
+        fontName,
+        BG,
+        FG,
+        animated,
+        dim: dimSlider ? parseInt(dimSlider.value, 10) : 0,
+      }));
+    } catch (_) { /* storage unavailable — fail silently */ }
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (typeof s.currentDay  === 'number')  currentDay  = s.currentDay;
+      if (typeof s.currentLang === 'string')  currentLang = s.currentLang;
+      if (typeof s.fontName    === 'string')  fontName    = s.fontName;
+      if (typeof s.BG          === 'string')  BG          = s.BG;
+      if (typeof s.FG          === 'string')  FG          = s.FG;
+      if (typeof s.animated    === 'boolean') animated    = s.animated;
+      if (typeof s.dim         === 'number') {
+        const dimSlider = document.getElementById('dimSlider');
+        if (dimSlider) {
+          dimSlider.value = s.dim;
+          document.getElementById('dimVal').textContent       = s.dim;
+          document.getElementById('dimOverlay').style.opacity = s.dim / 100;
+        }
+      }
+    } catch (_) { /* corrupt data — fail silently */ }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CANVAS — Retina / 4K sharp rendering
+     CSS size = viewport; pixel buffer = CSS × dpr
+  ═══════════════════════════════════════════════════════ */
+  const canvas = document.getElementById('canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, DPR;
+
+  function resize() {
+    DPR = window.devicePixelRatio || 1;
+    W   = window.innerWidth;
+    H   = window.innerHeight;
+
+    /* Physical pixel dimensions for sharpness */
+    canvas.width  = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+
+    /* CSS display size stays at logical pixels */
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+
+    /* Reset any previous transform, then apply DPR scale once.
+       Assigning canvas.width already resets the bitmap, but
+       setTransform here guarantees the matrix is clean regardless
+       of call order — prevents scale compounding on every resize. */
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* Debounced resize — prevents excessive canvas reallocation while dragging */
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resize(); dirty = true; }, 100);
+  });
+
+  /* ═══════════════════════════════════════════════════════
+     FONT HELPER
+     Builds canvas font string with correct weight & fallback
+  ═══════════════════════════════════════════════════════ */
+  function resolveFont(sizePx) {
+    /* Script languages always use their dedicated font */
+    if (SCRIPT_LANGS.has(currentLang)) {
+      const weight = currentLang === 'fa' ? '700' : '900';
+      return `${weight} ${sizePx}px ${LANG_FONT[currentLang]}, sans-serif`;
+    }
+
+    /* Latin fonts — all loaded at 900 except Rubik Mono One (no weight axis) */
+    const weight = fontName === 'Rubik Mono One' ? '400' : '900';
+    return `${weight} ${sizePx}px "${fontName}", "Helvetica Neue", sans-serif`;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     RTL DIRECTION — Persian and Hebrew
+  ═══════════════════════════════════════════════════════ */
+  function isRTL() {
+    return currentLang === 'fa' || currentLang === 'he';
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     FONT SIZE — clamp equivalent for canvas
+     Scales with viewport, respects min/max in logical px
+  ═══════════════════════════════════════════════════════ */
+  function labelFontSize() {
+    /* Equivalent to clamp(48px, 18vmin, 220px) */
+    const vmin = Math.min(W, H);
+    return Math.min(Math.max(vmin * 0.18, 48), 220);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     RENDER — called every frame
+  ═══════════════════════════════════════════════════════ */
+  function render(ts) {
+    /* In static mode, skip redraw unless something changed */
+    if (!animated && !dirty) {
+      requestAnimationFrame(render);
+      return;
+    }
+
+    /* Accumulate animation time only when animated and not paused */
+    if (lastTs !== null && animated && !paused) {
+      animTime += (ts - lastTs) / 1000;
+    }
+    lastTs = ts;
+    dirty  = false;
+
+    /* ── Background ── */
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+
+    /* ── Setup font ── */
+    const fs = labelFontSize();
+    ctx.font         = resolveFont(fs);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = FG;
+
+    const label = DAYS_ALL[currentLang][currentDay];
+
+    if (!animated) {
+      /* ── Static draw — perfectly centred, no transforms ── */
+      ctx.textAlign = 'center';
+      ctx.direction = isRTL() ? 'rtl' : 'ltr';
+      ctx.fillText(label, W / 2, H / 2);
+      ctx.direction = 'ltr';
+
+    } else {
+      /* ── Per-character independent stretch ──────────────────────
+         Each glyph gets its own scaleX and scaleY driven by unique
+         sine-wave phases, so letters breathe independently.
+
+         The text BLOCK stays locked to the viewport centre:
+           • Character positions are computed from unscaled advance
+             widths, so the overall footprint doesn't drift.
+           • Each glyph scales around its own centre point, so it
+             squishes / stretches in place without moving neighbours.
+
+         Phase seed: golden-angle steps (≈ 2.399 rad) give the best
+         spread across the unit circle — no two characters share a
+         perceptible rhythm.
+      ── */
+      const t  = animTime;
+      const τ  = Math.PI * 2;
+      const φ0 = 2.39996323; // golden angle (rad)
+
+      /* Split into Unicode code-points so emoji / CJK count as 1 */
+      const chars = [...label];
+      if (isRTL()) chars.reverse();
+
+      /* Measure every character at the current font — advance widths */
+      ctx.textAlign = 'left';
+      ctx.direction = 'ltr';
+      const advances = chars.map(ch => ctx.measureText(ch).width);
+      const totalW   = advances.reduce((s, w) => s + w, 0);
+
+      /* Start x so the whole block is horizontally centred */
+      let x = W / 2 - totalW / 2;
+
+      chars.forEach((ch, i) => {
+        const φ = i * φ0; // unique phase seed per character
+
+        /* Horizontal scale: two waves, different periods & phases */
+        const sX = 1
+          + 0.20 * Math.sin((t /  7.3) * τ + φ * 1.00)        // 7.3s  fast ripple
+          + 0.09 * Math.sin((t / 13.1) * τ + φ * 2.41 + 1.1); // 13.1s slow swell
+
+        /* Vertical scale: two waves, fully independent of sX */
+        const sY = 1
+          + 0.17 * Math.sin((t /  9.7) * τ + φ * 1.61 + 0.7)  // 9.7s
+          + 0.07 * Math.sin((t /  6.1) * τ + φ * 2.73 + 2.3); // 6.1s  faster twitch
+
+        /* Centre of this character in canvas space */
+        const cx = x + advances[i] / 2;
+
+        ctx.save();
+        ctx.translate(cx, H / 2);    // anchor to character centre, vertically locked
+        ctx.scale(sX, sY);           // stretch around that centre — no positional drift
+        ctx.fillText(ch, 0, 0);      // draw at origin (= the translated centre)
+        ctx.restore();
+
+        /* Advance by the UNSCALED width so the block stays centred */
+        x += advances[i];
+      });
+
+      ctx.direction = 'ltr'; // reset
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CLOCK — updates every second, uses browser locale
+     new Date() always reflects the user's local timezone
+  ═══════════════════════════════════════════════════════ */
+  function updateClock() {
+    const now    = new Date();
+    const locale = navigator.language || 'en-GB';
+
+    /* HH:MM:SS — explicit formatting avoids locale 12h ambiguity */
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    document.getElementById('dt-time').textContent = `${hh}:${mm}:${ss}`;
+    document.getElementById('dt-date').textContent  = now.toLocaleDateString(locale, {
+      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     DAY SELECTOR
+  ═══════════════════════════════════════════════════════ */
+  function setDay(idx) {
+    currentDay = idx;
+    document.querySelectorAll('.day-btn').forEach(btn => {
+      const d = parseInt(btn.dataset.day, 10);
+      btn.classList.toggle('active', d === idx);
+      btn.classList.toggle('today',  d === todayIdx);
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS PANEL
+  ═══════════════════════════════════════════════════════ */
+  const panel       = document.getElementById('panel');
+  const settingsBtn = document.getElementById('settingsBtn');
+
+  function togglePanel(force) {
+    const isOpen = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+    panel.classList.toggle('open', isOpen);
+    settingsBtn.setAttribute('aria-expanded', String(isOpen));
+  }
+
+  settingsBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    togglePanel();
+  });
+
+  /* Close panel on outside click */
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== settingsBtn) {
+      togglePanel(false);
+    }
+  });
+
+  /* Close on Escape */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') togglePanel(false);
+  });
+
+  /* ═══════════════════════════════════════════════════════
+     CONTROL WIRING
+  ═══════════════════════════════════════════════════════ */
+
+  /* Day buttons */
+  document.querySelectorAll('.day-btn').forEach(btn =>
+    btn.addEventListener('click', () => { setDay(parseInt(btn.dataset.day, 10)); saveState(); })
+  );
+
+  /* Language chips */
+  const fontSection = document.getElementById('fontSection');
+
+  document.querySelectorAll('#langGrid .chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#langGrid .chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentLang = btn.dataset.lang;
+
+      /* Lock font picker for script languages */
+      fontSection.classList.toggle('locked', SCRIPT_LANGS.has(currentLang));
+      saveState();
+    });
+  });
+
+  /* Animation toggle */
+  document.getElementById('animToggle').addEventListener('change', function () {
+    animated = this.checked;
+    if (!animated) animTime = 0; // reset so it snaps cleanly to rest position
+    saveState();
+  });
+
+  /* Background colour */
+  document.getElementById('bgPicker').addEventListener('input', function () {
+    BG = this.value;
+    document.getElementById('bgPreview').style.background = BG;
+    saveState();
+  });
+
+  /* Text colour */
+  document.getElementById('fgPicker').addEventListener('input', function () {
+    FG = this.value;
+    document.getElementById('fgPreview').style.background = FG;
+    saveState();
+  });
+
+  /* Screen dim slider */
+  document.getElementById('dimSlider').addEventListener('input', function () {
+    const pct = parseInt(this.value, 10);
+    document.getElementById('dimVal').textContent       = pct;
+    document.getElementById('dimOverlay').style.opacity = pct / 100;
+    saveState();
+  });
+
+  /* Font chips — each rendered in its own typeface for preview */
+  document.querySelectorAll('#fontGrid .chip').forEach(btn => {
+    btn.style.fontFamily = `"${btn.dataset.font}", sans-serif`;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#fontGrid .chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      fontName = btn.dataset.font;
+      saveState();
+    });
+  });
+
+  /* ═══════════════════════════════════════════════════════
+     PAUSE ON CANVAS CLICK / TAP
+     Tapping the canvas pauses/resumes the animation when
+     animated mode is on. A brief toast confirms the action.
+  ═══════════════════════════════════════════════════════ */
+  const pauseHint     = document.getElementById('pauseHint');
+  const pauseHintText = document.getElementById('pauseHintText');
+  let pauseHintTimer;
+
+  canvas.addEventListener('click', () => {
+    if (!animated) return; // nothing to pause in static mode
+    paused = !paused;
+    pauseHintText.textContent = paused ? 'Paused — tap to resume' : 'Resumed';
+    pauseHint.classList.add('show');
+    clearTimeout(pauseHintTimer);
+    pauseHintTimer = setTimeout(() => pauseHint.classList.remove('show'), 1400);
+  });
+
+  /* ═══════════════════════════════════════════════════════
+     FULLSCREEN TOGGLE
+  ═══════════════════════════════════════════════════════ */
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+  function updateFsIcon() {
+    const isFs = !!document.fullscreenElement;
+    document.getElementById('fsIcon').innerHTML = isFs
+      ? '<path d="M6 2H2v4M10 2h4v4M14 10v4h-4M6 14H2v-4M6 6l-4-4M10 6l4-4M10 10l4 4M6 10l-4 4" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>'
+      : '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>';
+  }
+
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', updateFsIcon);
+
+  /* ═══════════════════════════════════════════════════════
+     INITIALISE
+  ═══════════════════════════════════════════════════════ */
+  loadState(); // restore persisted values into state vars + dim UI
+
+  /* Reflect restored state into all controls */
+  setDay(currentDay);
+
+  /* Language chip */
+  document.querySelectorAll('#langGrid .chip').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === currentLang);
+  });
+  fontSection.classList.toggle('locked', SCRIPT_LANGS.has(currentLang));
+
+  /* Font chip */
+  document.querySelectorAll('#fontGrid .chip').forEach(b => {
+    b.classList.toggle('active', b.dataset.font === fontName);
+  });
+
+  /* Animation toggle */
+  document.getElementById('animToggle').checked = animated;
+
+  /* Colour pickers + previews */
+  const bgPicker = document.getElementById('bgPicker');
+  const fgPicker = document.getElementById('fgPicker');
+  bgPicker.value = BG;
+  fgPicker.value = FG;
+  document.getElementById('bgPreview').style.background = BG;
+  document.getElementById('fgPreview').style.background = FG;
+
+  resize();
+  updateClock();
+  setInterval(updateClock, 1000);
+  requestAnimationFrame(render);
+</script>
+</body>
+</html>
