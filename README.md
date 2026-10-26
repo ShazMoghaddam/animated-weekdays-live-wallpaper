@@ -8,7 +8,7 @@ WHAT'S INCLUDED
 ---------------
   Animated-Weekdays-Live-Wallpaper.html  ← The wallpaper (everything is inside this one file)
   README.txt                             ← You are reading this
-  LICENSE.txt                            ← Personal use terms
+  LICENSE                                ← MIT licence
 
 QUICK START (takes 10 seconds)
 -------------------------------
