@@ -98,3 +98,18 @@ QUESTIONS OR ISSUES?
 
   Thank you for your purchase — enjoy your wallpaper! 🎉
 ========================================
+
+─────────────────────────────────────────
+ANDROID APP (SOURCE)
+─────────────────────────────────────────
+  The Android live wallpaper version lives in the  android/  folder.
+
+  To build it:
+  1. Open the  android/  folder in Android Studio
+  2. Let Gradle sync (Android Studio creates local.properties for you)
+  3. Run on a device or emulator, then set it as your live wallpaper
+
+─────────────────────────────────────────
+  Shaz Moghaddam · London
+  https://shazmoghaddam.github.io
+========================================
