@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Site build output
+_site/
+
+# Python and Node
+__pycache__/
+node_modules/
