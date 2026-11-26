@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 (2026-11-26)
+
+### Fixed
+- **The screen stays awake.** Left open in a browser, the wallpaper used to give way to the computer's sleep or screensaver after a few minutes, like any other page. It now asks the browser to keep the screen on while it's showing, the same way the Bezel and Orbs desk displays do. If the browser or the computer lets go (after you switch tabs, after sleep or on low battery), it asks again as soon as it's back on screen. Nothing changes in the site's preview or in the Android app.
+
 ## 1.0.0 (2026-11-18)
 
 First release as an open-source web wallpaper, with its own site.

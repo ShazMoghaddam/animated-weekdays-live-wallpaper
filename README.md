@@ -19,6 +19,7 @@ Animated Weekdays is a live wallpaper that shows today's name in big, heavy lett
 - **Seven languages.** English, French, German, Spanish, Japanese, Persian and Hebrew, each in a typeface made for its script, with right-to-left text handled properly.
 - **Your look.** Any background and text colour, five display fonts from clean to retro, and a dimmer for a softer screen at night.
 - **Any screen.** The word sizes itself to fit, from a phone to a 4K monitor, and stays sharp on Retina and high-resolution displays.
+- **Stays awake.** The screen doesn't sleep or switch to the screensaver while the wallpaper is showing in a browser tab, in browsers that support it.
 - **Offline and private.** One file with the fonts built in. No accounts, no tracking and no network requests.
 
 ![Wednesday in Persian, Japanese and Hebrew](docs/languages.png)
@@ -43,7 +44,7 @@ https://shazmoghaddam.github.io/animated-weekdays-live-wallpaper/wallpaper/
 
 - **Mac:** install [Plash](https://sindresorhus.com/plash), free from the Mac App Store. Choose Add Website from its menu bar icon and paste the address. The wallpaper sits behind your windows and icons.
 - **Windows:** install [Lively Wallpaper](https://www.rocksdanister.com/lively/), free from the Microsoft Store. Press the plus button, paste the address and press the arrow.
-- **Any screen:** open the wallpaper in any browser and press the full screen button in the bottom right. Good for a second monitor, a tablet or a TV.
+- **Any screen:** open the wallpaper in any browser and press the full screen button in the bottom right. The screen stays awake while it's showing. Good for a second monitor, a tablet or a TV.
 - **Offline:** download [`Animated-Weekdays-Live-Wallpaper.html`](Animated-Weekdays-Live-Wallpaper.html) and open it from your computer (Lively can also use the file directly). It needs no internet at all.
 
 ## Using it

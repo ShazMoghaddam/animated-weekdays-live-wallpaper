@@ -1177,6 +1177,34 @@
   document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
   /* ═══════════════════════════════════════════════════════
+     KEEP THE SCREEN AWAKE
+     Without this the computer treats the wallpaper like any
+     other page and sleeps the screen or starts the screensaver.
+     The browser lets go when the tab is hidden, and the system
+     can drop it on its own (after sleep, on low battery), so ask
+     again on return, on a tap and every 20 seconds. Skipped in
+     the site's preview frame, where it isn't allowed.
+  ═══════════════════════════════════════════════════════ */
+  let wakeLock = null;
+  let askingForWake = false;
+  async function keepAwake() {
+    if (EMBEDDED || wakeLock || askingForWake || !navigator.wakeLock) return;
+    if (document.visibilityState !== 'visible') return;
+    askingForWake = true;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) {
+      wakeLock = null;
+    }
+    askingForWake = false;
+  }
+  keepAwake();
+  document.addEventListener('visibilitychange', keepAwake);
+  document.addEventListener('pointerdown', keepAwake);
+  setInterval(keepAwake, 20000);
+
+  /* ═══════════════════════════════════════════════════════
      FONT LOADING
      The canvas can't wait for a font by itself, so ask for the one
      in use and redraw once it's ready (otherwise the first frame
